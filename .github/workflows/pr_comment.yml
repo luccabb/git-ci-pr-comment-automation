@@ -34,9 +34,23 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: trigger-tests
-
     steps:
-    - name: Run test
-      run: |
-        echo "Test succeeds"
+      - name: Github API Request
+        id: request
+        uses: octokit/request-action@v2.0.0
+        with:
+          route: ${{ github.event.issue.pull_request.url }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout PR Branch
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ fromJson(steps.request.outputs.data).head.repo.full_name }}
+          ref: ${{ steps.pr_data.outputs.branch }}
+
+      - name: Run test
+        run: |
+          echo "Test succeeds"
 
