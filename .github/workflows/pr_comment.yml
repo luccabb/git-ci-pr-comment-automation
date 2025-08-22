@@ -35,29 +35,70 @@ jobs:
     runs-on: ubuntu-latest
     needs: trigger-tests
     steps:
-      - name: Github API Request
-        id: request
-        uses: octokit/request-action@v2.0.0
+      - name: Get PR details
+        id: pr
+        uses: actions/github-script@v7
         with:
-          route: ${{ github.event.issue.pull_request.url }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Get PR informations
-        id: pr_data
-        run: |
-          echo "::set-output name=repo_name::${{ fromJson(steps.request.outputs.data).head.repo.full_name }}"
-          echo "::set-output name=repo_clone_url::${{ fromJson(steps.request.outputs.data).head.repo.clone_url }}"
-          echo "::set-output name=repo_ssh_url::${{ fromJson(steps.request.outputs.data).head.repo.ssh_url }}"
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            
+            core.setOutput('head_ref', pr.head.ref);
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('base_ref', pr.base.ref);
+            
+            return pr;
 
-      - name: Checkout PR Branch
-        uses: actions/checkout@v2
+      - name: Create check run
+        id: check
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ fromJson(steps.request.outputs.data).head.repo.full_name }}
-          ref: ${{ steps.pr_data.outputs.branch }}
+          script: |
+            const { data: check } = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Integration Tests',
+              head_sha: '${{ steps.pr.outputs.head_sha }}',
+              status: 'in_progress',
+              started_at: new Date().toISOString(),
+              output: {
+                title: 'Integration Tests',
+                summary: 'Running integration tests...'
+              }
+            });
+            
+            core.setOutput('check_id', check.id);
+            return check;
+      
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_ref }}
 
       - name: Run test
         run: |
           echo "Test succeeds"
+      
+      - name: Update check run
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const conclusion = '${{ job.status }}' === 'success' ? 'success' : 'failure';
+            
+            await github.rest.checks.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              check_run_id: ${{ steps.check.outputs.check_id }},
+              status: 'completed',
+              conclusion: conclusion,
+              completed_at: new Date().toISOString(),
+              output: {
+                title: `Integration Tests ${conclusion}`,
+                summary: `The integration tests have ${conclusion === 'success' ? 'passed' : 'failed'}.`,
+                text: 'Triggered by comment from @${{ github.actor }}'
+              }
+            });
 
