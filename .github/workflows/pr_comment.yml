@@ -42,13 +42,6 @@ jobs:
           route: ${{ github.event.issue.pull_request.url }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Checkout PR Branch
-        uses: actions/checkout@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ fromJson(steps.request.outputs.data).head.repo.full_name }}
-          ref: ${{ steps.pr_data.outputs.branch }}
       
       - name: Get PR informations
         id: pr_data
@@ -56,6 +49,13 @@ jobs:
           echo "::set-output name=repo_name::${{ fromJson(steps.request.outputs.data).head.repo.full_name }}"
           echo "::set-output name=repo_clone_url::${{ fromJson(steps.request.outputs.data).head.repo.clone_url }}"
           echo "::set-output name=repo_ssh_url::${{ fromJson(steps.request.outputs.data).head.repo.ssh_url }}"
+
+      - name: Checkout PR Branch
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ fromJson(steps.request.outputs.data).head.repo.full_name }}
+          ref: ${{ steps.pr_data.outputs.branch }}
 
       - name: Run test
         run: |
