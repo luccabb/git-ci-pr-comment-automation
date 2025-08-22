@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: trigger-tests
     steps:
-      - name: Get PR details
+      - name: Get PR info and set pending status
         id: pr
         uses: actions/github-script@v7
         with:
@@ -47,32 +47,19 @@ jobs:
               pull_number: context.issue.number
             });
             
-            core.setOutput('head_ref', pr.head.ref);
-            core.setOutput('head_sha', pr.head.sha);
-            core.setOutput('base_ref', pr.base.ref);
-            
-            return pr;
-
-      - name: Create check run
-        id: check
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data: check } = await github.rest.checks.create({
+            // Set pending status - this usually works!
+            await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              name: 'Integration Tests',
-              head_sha: '${{ steps.pr.outputs.head_sha }}',
-              status: 'in_progress',
-              started_at: new Date().toISOString(),
-              output: {
-                title: 'Integration Tests',
-                summary: 'Running integration tests...'
-              }
+              sha: pr.head.sha,
+              state: 'pending',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              description: 'Running integration tests...',
+              context: 'Integration Tests'
             });
             
-            core.setOutput('check_id', check.id);
-            return check;
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('head_ref', pr.head.ref);
       
       - uses: actions/checkout@v4
         with:
@@ -82,24 +69,20 @@ jobs:
         run: |
           echo "Test succeeds"
       
-      - name: Update check run
+      - name: Set final status
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
-            const conclusion = '${{ job.status }}' === 'success' ? 'success' : 'failure';
+            const state = '${{ job.status }}' === 'success' ? 'success' : 'failure';
             
-            await github.rest.checks.update({
+            await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              check_run_id: ${{ steps.check.outputs.check_id }},
-              status: 'completed',
-              conclusion: conclusion,
-              completed_at: new Date().toISOString(),
-              output: {
-                title: `Integration Tests ${conclusion}`,
-                summary: `The integration tests have ${conclusion === 'success' ? 'passed' : 'failed'}.`,
-                text: 'Triggered by comment from @${{ github.actor }}'
-              }
+              sha: '${{ steps.pr.outputs.head_sha }}',
+              state: state,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              description: `Integration tests ${state}`,
+              context: 'Integration Tests'
             });
 
