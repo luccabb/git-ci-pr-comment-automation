@@ -46,7 +46,6 @@ jobs:
               pull_number: context.issue.number
             });
             
-            // Set pending status - this usually works!
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
