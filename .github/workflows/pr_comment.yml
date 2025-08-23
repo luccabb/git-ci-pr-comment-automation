@@ -65,8 +65,7 @@ jobs:
           ref: ${{ steps.pr.outputs.head_ref }}
 
       - name: Run test
-        run: |
-          echo "Test succeeds"
+        run: ./test.sh
       
       - name: Set final status
         if: always()
